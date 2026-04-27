@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSDA Central Hub | KMITL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body { font-family: 'Kanit', sans-serif; background-color: #f1f5f9; margin: 0; overflow: hidden; }
+        .bg-send { background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); border-bottom: 6px solid #1e293b; }
+        .bg-receive { background: linear-gradient(135deg, #10b981 0%, #064e3b 100%); border-bottom: 6px solid #064e3b; }
+        #auth-overlay { position: fixed; inset: 0; background: #0f172a; z-index: 9999; display: flex; justify-content: center; align-items: center; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <div id="auth-overlay">
+        <div class="bg-white p-10 rounded-[2.5rem] text-center max-w-md w-full mx-4 shadow-2xl">
+            <div class="w-20 h-20 bg-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <span class="text-white text-4xl font-black italic">O</span>
+            </div>
+            <h2 class="text-3xl font-black text-slate-800 mb-6">OSDA SYSTEM</h2>
+            <div id="google-btn-container" class="flex justify-center"></div>
+            <p class="mt-6 text-sm text-slate-400">กรุณาเข้าสู่ระบบเพื่อใช้งาน</p>
+        </div>
+    </div>
+
+    <div id="denied-screen" class="hidden flex-grow flex items-center justify-center bg-slate-100 p-8">
+        <div class="text-center">
+            <div class="text-7xl mb-4">🚫</div>
+            <h1 class="text-3xl font-black text-red-600 mb-2">สิทธิ์การเข้าถึงถูกปฏิเสธ</h1>
+            <p id="denied-msg" class="text-slate-600 mb-6"></p>
+            <button onclick="location.reload()" class="bg-slate-800 text-white px-8 py-3 rounded-2xl font-bold">ลองใช้เมลอื่น</button>
+        </div>
+    </div>
+
+    <nav class="bg-white border-b-2 border-slate-200 px-6 py-3 z-50 hidden shadow-sm" id="main-nav">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="location.reload()">
+                <div class="bg-orange-600 px-3 py-1.5 rounded-xl"><span class="text-white font-black text-xl">O</span></div>
+                <div class="leading-none text-left">
+                    <span class="text-2xl font-black text-slate-800 block">OSDA HUB</span>
+                    <span class="text-[9px] text-orange-600 font-bold uppercase tracking-widest">KMITL Management</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div id="user-display" class="flex items-center gap-3 bg-slate-50 p-1.5 pr-5 rounded-full border border-slate-200"></div>
+                <button onclick="location.reload()" class="bg-red-600 text-white px-5 py-2 rounded-xl font-bold text-sm">ออกจากระบบ</button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="menu-screen" class="hidden flex-grow flex items-center justify-center p-8 bg-slate-100">
+        <div class="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div onclick="openApp('ส่งข้อมูล.html', 'ระบบส่งข้อมูล (Sender)', 'bg-blue-800')" class="bg-send p-12 rounded-[3rem] shadow-2xl cursor-pointer hover:-translate-y-4 transition-all text-white group">
+                <div class="text-6xl mb-4">📤</div>
+                <h3 class="text-4xl font-black mb-2 italic text-left">ระบบส่งข้อมูล</h3>
+                <p class="text-blue-100 font-light text-left">บันทึกและส่งเอกสารใหม่</p>
+            </div>
+            <div onclick="openApp('รับข้อมูล หน้าบ้าน.html', 'ระบบรับข้อมูล (Receiver)', 'bg-emerald-800')" class="bg-receive p-12 rounded-[3rem] shadow-2xl cursor-pointer hover:-translate-y-4 transition-all text-white group">
+                <div class="text-6xl mb-4">📥</div>
+                <h3 class="text-4xl font-black mb-2 italic text-left">ระบบรับข้อมูล</h3>
+                <p class="text-emerald-100 font-light text-left">ตรวจสอบและค้นหาเอกสาร</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-screen" class="hidden flex-grow flex-col bg-white">
+        <div class="px-6 py-3 bg-slate-50 border-b flex justify-between items-center">
+            <button onclick="closeApp()" class="font-bold text-slate-700 flex items-center gap-2">🏠 กลับหน้าหลัก</button>
+            <div id="app-title-badge" class="px-5 py-1 rounded-full text-white text-xs font-bold shadow-md uppercase"></div>
+        </div>
+        <div class="flex-grow"><iframe id="main-frame"></iframe></div>
+    </div>
+
+    <script>
+        function decodeJwt(token) {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            return JSON.parse(decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')));
+        }
+
+        window.onload = () => {
+            google.accounts.id.initialize({ 
+                client_id: "459753648639-ki35pndmckk5lqjgobjeoe804jgs44un.apps.googleusercontent.com", 
+                callback: handleLoginResponse 
+            });
+            google.accounts.id.renderButton(document.getElementById("google-btn-container"), { theme: "filled_blue", size: "large", shape: "pill" });
+        };
+
+        function handleLoginResponse(response) {
+            const user = decodeJwt(response.credential);
+            const email = user.email.toLowerCase();
+
+            // ปิดหน้า Login ก่อนเสมอ
+            document.getElementById('auth-overlay').style.display = 'none';
+            document.getElementById('main-nav').classList.remove('hidden');
+            
+            // แสดงข้อมูลผู้ใช้ (จะเมลไหนก็แสดง เพื่อให้ระบบไม่รวน)
+            document.getElementById('user-display').innerHTML = `
+                <img src="${user.picture}" class="w-9 h-9 rounded-full border border-white">
+                <span class="text-md font-bold text-slate-800">${user.name}</span>
+            `;
+
+            if (email.endsWith("@kmitl.ac.th")) {
+                // ✅ เมลมอ: เปิดเมนูใช้งาน
+                document.getElementById('menu-screen').classList.remove('hidden');
+            } else {
+                // ❌ เมลอื่น: เปิดหน้าแจ้งเตือน (แทนเมนู)
+                document.getElementById('denied-msg').innerText = `ขออภัยเมล ${email} ไม่มีสิทธิ์เข้าถึงระบบนี้`;
+                document.getElementById('denied-screen').classList.remove('hidden');
+            }
+        }
+
+        function openApp(url, title, colorClass) {
+            document.getElementById('menu-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            document.getElementById('app-screen').classList.add('flex');
+            const badge = document.getElementById('app-title-badge');
+            badge.className = `px-5 py-1 rounded-full text-white text-xs font-bold shadow-md ${colorClass}`;
+            badge.innerText = title;
+            document.getElementById('main-frame').src = url;
+        }
+
+        function closeApp() {
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('flex');
+            document.getElementById('menu-screen').classList.remove('hidden');
+            document.getElementById('main-frame').src = "";
+        }
+    </script>
+</body>
+</html>

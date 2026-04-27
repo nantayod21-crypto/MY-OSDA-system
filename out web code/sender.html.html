@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>OSDA Document System</title>
+    
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root { --kmitl-orange: #ea580c; --emerald: #059669; }
+        
+        /* สู้กับ WordPress wpautop */
+        #osda-app-wrapper br, #osda-app-wrapper p:empty { display: none !important; }
+
+        /* ธีมใหม่: เปลี่ยนพื้นหลังเป็นสีเทาคลีนๆ เหมือนหน้ารับข้อมูล */
+        #osda-app-wrapper {
+            background-color: #f0f4f8 !important; 
+            min-height: 100vh; width: 100vw !important;
+            position: relative; left: 50%; transform: translateX(-50%);
+            margin: 0; padding: 0; overflow-x: hidden;
+        }
+        
+        #osda-app-wrapper * { font-family: 'Sarabun', sans-serif !important; box-sizing: border-box !important; }
+        #osda-app-wrapper p { margin: 0 !important; padding: 0 !important; line-height: normal !important; }
+        body { color: #1e293b; margin: 0; overflow-x: hidden; }
+        
+        /* ปรับความกว้างให้เท่ากับหน้ารับข้อมูล */
+        .hub-container { 
+            max-width: 900px;
+            margin: auto; padding: 60px 20px 40px 20px !important; min-height: 100vh;
+            position: relative;
+        }
+        
+        /* Header ใหม่ คลีนๆ */
+        .hub-header-box {
+            background: #ffffff !important;
+            padding: 40px 30px !important;
+            border-radius: 20px !important;
+            border: 1px solid #e2e8f0 !important; 
+            margin-bottom: 30px !important; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03) !important;
+            display: flex !important; flex-direction: column !important; 
+            align-items: flex-start !important; justify-content: center !important;
+        }
+
+        .logo-text-osda { font-weight: 900 !important; color: var(--kmitl-orange) !important; display: block !important; }
+        
+        /* Sidebar (คงไว้แต่ปรับให้ดูเนียนขึ้น) */
+        #sidebar {
+            position: fixed !important; top: 0 !important; left: -300px; width: 280px !important; height: 100% !important;
+            background: white !important; z-index: 999999 !important; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 10px 0 30px rgba(0,0,0,0.1) !important; padding: 40px 15px 30px 15px !important;
+            display: flex !important; flex-direction: column !important;
+        }
+        #sidebar.open { left: 0 !important; }
+        #sidebarOverlay {
+            position: fixed !important; inset: 0 !important; background: rgba(15, 23, 42, 0.4) !important; z-index: 999998 !important;
+            display: none; backdrop-filter: blur(3px) !important;
+        }
+
+        .nav-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; border: none; cursor: pointer; transition: 0.2s; font-weight: 600; font-size: 15px; margin-bottom: 8px; background: transparent; }
+        .nav-item.home { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; margin-bottom: 25px; justify-content: center; }
+        .nav-item:hover { background: #f1f5f9; }
+        
+        /* Modal พื้นหลังสีคลีน */
+        #appModal { 
+            position: fixed !important; inset: 0 !important; background: #f0f4f8 !important; 
+            z-index: 999990 !important; display: none; overflow-y: auto !important;
+        }
+
+        /* Input ธีมใหม่ */
+        .input-box { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; transition: 0.2s; color: #334155; background: #ffffff; }
+        .input-box:focus { border-color: var(--kmitl-orange); box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1); }
+        .input-box:disabled { background-color: #f1f5f9; color: #64748b; cursor: not-allowed; border-color: #e2e8f0; font-weight: bold; }
+        
+        /* สไตล์ตารางรายการ (List) */
+        .doc-card { 
+            background: white; border-radius: 16px; padding: 16px; margin-bottom: 12px; 
+            border: 1px solid #e2e8f0; border-left: 6px solid var(--kmitl-orange); 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03); transition: transform 0.2s;
+        }
+        .doc-card:hover { transform: scale(1.01); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08); }
+    </style>
+</head>
+<body>
+
+<div id="osda-app-wrapper">
+
+    <div id="main-app">
+        <div id="sidebarOverlay" onclick="toggleSidebar()"></div>
+        <div id="sidebar">
+            <div class="flex flex-col items-center mb-8 pt-4 border-bottom pb-6 border-slate-50">
+                <div class="w-14 h-14 bg-orange-600 rounded-2xl flex items-center justify-center text-white mb-3 shadow-lg">
+                    <i data-lucide="layout-grid" class="w-8 h-8"></i>
+                </div>
+                <div class="logo-text-osda" style="font-size: 32px !important; margin-bottom: 10px !important; line-height: 1 !important;">OSDA</div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest -mt-1">Menu Navigation</div>
+            </div>
+             
+            <nav class="flex-1 flex flex-col">
+                <button onclick="goHome()" class="nav-item home"><i data-lucide="home"></i> กลับหน้าหลัก</button>
+                <div class="text-[11px] font-bold text-slate-300 px-4 mb-3 uppercase tracking-widest text-center">รายการจัดการ</div>
+                <button onclick="switchModule('new')" class="nav-item text-orange-600"><i data-lucide="plus-circle"></i> บันทึกใหม่</button>
+                <button onclick="switchModule('backfill')" class="nav-item text-blue-600"><i data-lucide="history"></i> ย้อนหลัง</button>
+                <button onclick="switchModule('edit')" class="nav-item text-green-600"><i data-lucide="pencil"></i> แก้ไขข้อมูล</button>
+                <button onclick="switchModule('cancel')" class="nav-item text-red-600"><i data-lucide="trash-2"></i> ยกเลิกรายการ</button>
+                <div class="border-t border-slate-100 my-2"></div>
+                <button onclick="exportCurrentMonthToExcel()" class="nav-item text-emerald-600"><i data-lucide="download"></i> ส่งออก Excel</button>
+            </nav>
+        </div>
+
+        <div id="hubPage" class="hub-container">
+            
+            <div class="hub-header-box">
+                <div class="logo-text-osda" style="font-size: 32px !important; line-height: 1 !important; margin: 0 0 5px 0 !important; letter-spacing: -1px !important;">OSDA <span class="text-emerald-600">EXPORT</span></div>
+                <div class="text-xl font-bold text-slate-800 tracking-tight" style="margin: 0 0 5px 0 !important; line-height: 1.2 !important;">ระบบจัดการเอกสารภายใน</div>
+                <div class="text-slate-400 text-sm font-bold mt-1">เลือกรายการที่ต้องการดำเนินการ</div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 z-10">
+                <button onclick="openModule('new')" class="bg-orange-600 hover:bg-orange-700 text-white p-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-orange-600/20 transition-all transform hover:-translate-y-1">
+                    <i data-lucide="plus-circle" class="w-8 h-8"></i>
+                    <span class="text-xl font-bold">บันทึกใหม่</span>
+                </button>
+                <button onclick="openModule('backfill')" class="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-blue-600/20 transition-all transform hover:-translate-y-1">
+                    <i data-lucide="history" class="w-8 h-8"></i>
+                    <span class="text-xl font-bold">ย้อนหลัง</span>
+                </button>
+                <button onclick="openModule('edit')" class="bg-amber-500 hover:bg-amber-600 text-white p-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-amber-500/20 transition-all transform hover:-translate-y-1">
+                    <i data-lucide="pencil" class="w-8 h-8"></i>
+                    <span class="text-xl font-bold">แก้ไขข้อมูล</span>
+                </button>
+                <button onclick="openModule('cancel')" class="bg-red-500 hover:bg-red-600 text-white p-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-red-500/20 transition-all transform hover:-translate-y-1">
+                    <i data-lucide="trash-2" class="w-8 h-8"></i>
+                    <span class="text-xl font-bold">ยกเลิกรายการ</span>
+                </button>
+                <button onclick="exportCurrentMonthToExcel()" class="sm:col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white p-6 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-600/30 transition-all transform hover:-translate-y-1 mt-2 border-2 border-emerald-500">
+                    <i data-lucide="download" class="w-8 h-8"></i>
+                    <span class="text-xl font-bold">ส่งออก Excel <span class="font-normal text-emerald-100 ml-1">(ประจำเดือนปัจจุบัน)</span></span>
+                </button>
+            </div>
+        </div>
+
+        <div id="appModal">
+            <header class="flex items-center gap-4 p-6 border-b border-slate-200 sticky top-0 bg-white z-20 shadow-sm">
+                <button onclick="goHome()" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                </button>
+                <h2 id="moduleTitle" class="font-bold text-xl text-slate-800">TITLE</h2>
+                <button onclick="toggleSidebar()" class="ml-auto p-2 text-slate-400 hover:text-slate-600 transition">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+            </header>
+
+            <div class="p-6 sm:p-10 max-w-2xl mx-auto">
+                
+                <div id="formSection" style="display:none;">
+                    <form id="docForm" class="space-y-5">
+                        <input type="hidden" id="editId">
+                        
+                        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <div class="mb-4 text-center">
+                                <label class="text-sm font-bold text-slate-600 block mb-2">เลขลำดับเอกสาร (อัตโนมัติ)</label>
+                                <input type="text" id="seqDisplay" class="w-full text-center text-3xl font-black text-slate-800 bg-transparent border-b-2 border-slate-300 py-2 outline-none" disabled>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-[11px] font-bold text-slate-500 block mb-1 text-center">ลงวันที่</label>
+                                    <input type="date" id="dateInput" required onchange="calculateSeq()" class="input-box text-center font-bold">
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-bold text-slate-500 block mb-1 text-center">เวลาบันทึก</label>
+                                    <input type="text" id="timeInput" disabled class="input-box text-center">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-5 pt-2">
+                            <div><label class="text-xs font-bold text-slate-500 block mb-1">จาก (ผู้จัดทำ)</label><input type="text" id="fromWho" required placeholder="ชื่อผู้จัดทำ..." class="input-box" autocomplete="off"></div>
+                            <div><label class="text-xs font-bold text-slate-500 block mb-1">ถึง (ผู้รับ)</label><input type="text" id="toWho" required placeholder="ชื่อผู้รับ..." class="input-box" autocomplete="off"></div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-5">
+                            <div><label class="text-xs font-bold text-slate-500 block mb-1">หน่วยรับ</label><input type="text" id="department" placeholder="เช่น พัสดุ, คลัง, OSDA" class="input-box" autocomplete="off"></div>
+                            <div><label class="text-xs font-bold text-slate-500 block mb-1">เลขที่ (ถ้ามี)</label><input type="text" id="docNumber" placeholder="..." class="input-box" autocomplete="off"></div>
+                        </div>
+                        
+                        <div><label class="text-xs font-bold text-slate-500 block mb-1">ชื่อเรื่อง</label><input type="text" id="subject" required placeholder="พิมพ์หัวข้อเอกสาร..." class="input-box font-bold text-lg py-3"></div>
+                        <div><label class="text-xs font-bold text-slate-500 block mb-1">รายละเอียด / การปฏิบัติ</label><textarea id="action" rows="2" placeholder="ระบุรายละเอียดเพิ่มเติม..." class="input-box"></textarea></div>
+                        
+                        <button type="submit" class="w-full bg-slate-800 text-white font-bold py-4 rounded-xl shadow-md mt-4 text-lg hover:bg-slate-900 transition active:transform active:scale-95 flex justify-center items-center gap-2">
+                            <i data-lucide="save" class="w-5 h-5"></i> บันทึกข้อมูล
+                        </button>
+                    </form>
+                </div>
+
+                <div id="listSection" style="display:none;">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 mb-6 shadow-sm">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-4">
+                            <button onclick="changeMonth(-1)" class="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-600 transition"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                            <div id="calendarMonth" class="font-black text-lg text-slate-800"></div>
+                            <button onclick="changeMonth(1)" class="p-2 bg-slate-50 hover:bg-slate-100 rounded-full text-slate-600 transition"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                        </div>
+                        <div id="calendarDays" class="grid grid-cols-7 gap-2 text-center text-xs font-bold text-slate-400"></div>
+                    </div>
+                    <div id="dataList" class="space-y-3 pb-10"></div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+</div> 
+    
+    <script>
+        let db = JSON.parse(localStorage.getItem('kmitl_rt_db') || '[]');
+        let currentMode = ''; 
+        let viewDate = new Date();
+        let selectedDateStr = new Date().toISOString().split('T')[0];
+        
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            const ov = document.getElementById('sidebarOverlay');
+            if(sb) sb.classList.toggle('open');
+            if(ov) ov.style.display = sb.classList.contains('open') ? 'block' : 'none';
+        }
+
+        function goHome() { toggleSidebar(); document.getElementById('appModal').style.display = 'none'; }
+        function switchModule(m) { toggleSidebar(); openModule(m); }
+
+        function openModule(mode) {
+            currentMode = mode;
+            const dateInput = document.getElementById('dateInput');
+            const appModal = document.getElementById('appModal');
+            const formSection = document.getElementById('formSection');
+            const listSection = document.getElementById('listSection');
+            const moduleTitle = document.getElementById('moduleTitle');
+            
+            if(appModal) appModal.style.display = 'block';
+            if(formSection) formSection.style.display = (mode === 'new' || mode === 'backfill') ? 'block' : 'none';
+            if(listSection) listSection.style.display = (mode === 'edit' || mode === 'cancel') ? 'block' : 'none';
+            if(moduleTitle) moduleTitle.innerText = (mode === 'new' ? 'บันทึกใหม่' : mode === 'backfill' ? 'ย้อนหลัง' : mode === 'edit' ? 'แก้ไขข้อมูล' : 'ยกเลิกรายการ');
+            
+            if(mode === 'new') {
+                resetForm();
+                if(dateInput) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                    dateInput.disabled = true; 
+                }
+            } else if(mode === 'backfill') {
+                resetForm();
+                if(dateInput) dateInput.disabled = false; 
+            }
+
+            if(mode === 'edit' || mode === 'cancel') { renderCalendar(); showList(selectedDateStr); }
+            if(window.lucide) lucide.createIcons();
+            calculateSeq();
+        }
+
+        function calculateSeq() {
+            try {
+                const editIdEl = document.getElementById('editId');
+                if(editIdEl && editIdEl.value) return;
+                
+                const dateInputEl = document.getElementById('dateInput');
+                if(!dateInputEl || !dateInputEl.value) return;
+                
+                const target = dateInputEl.value;
+                const sameDay = db.filter(r => r.date === target).sort((a,b) => b.sequence.localeCompare(a.sequence, undefined, {numeric: true}));
+                const seqDisplayEl = document.getElementById('seqDisplay');
+                
+                if(!seqDisplayEl) return;
+
+                if (currentMode === 'new') {
+                    const sortedAll = [...db].sort((a,b) => a.sequence.localeCompare(b.sequence, undefined, {numeric: true}));
+                    let nextBase = 1;
+                    if (sortedAll.length) { 
+                        const lastBase = sortedAll[sortedAll.length-1].sequence.split('.')[0];
+                        nextBase = parseInt(lastBase) + 1; 
+                    }
+                    seqDisplayEl.value = String(nextBase).padStart(4, '0');
+                } else {
+                    if (sameDay.length) {
+                        let last = sameDay[0].sequence;
+                        let base = last.includes('.') ? last.substring(0, last.lastIndexOf('.')) : last;
+                        let sub = last.includes('.') ? parseInt(last.split('.').pop()) + 1 : 1;
+                        seqDisplayEl.value = `${base}.${String(sub).padStart(2, '0')}`;
+                    } else { 
+                        const sortedAll = [...db].sort((a,b) => a.sequence.localeCompare(b.sequence, undefined, {numeric: true}));
+                        let lastBase = "0001";
+                        if(sortedAll.length) lastBase = sortedAll[sortedAll.length-1].sequence.split('.')[0];
+                        seqDisplayEl.value = `${lastBase}.01`;
+                    }
+                }
+            } catch (err) {}
+        }
+
+        setInterval(() => { 
+            try {
+                const editIdEl = document.getElementById('editId');
+                const timeInputEl = document.getElementById('timeInput');
+                if(editIdEl !== null && timeInputEl !== null) {
+                    if (editIdEl.value === "") {
+                        timeInputEl.value = new Date().toLocaleTimeString('th-TH', { hour12: false }) + " น."; 
+                    }
+                }
+            } catch (e) {}
+        }, 1000);
+
+        function resetForm() {
+            try {
+                const docForm = document.getElementById('docForm');
+                const editId = document.getElementById('editId');
+                const dateInput = document.getElementById('dateInput');
+                const deptInput = document.getElementById('department');
+                const docNumInput = document.getElementById('docNumber');
+                
+                if(docForm) docForm.reset();
+                if(editId) editId.value = '';
+                if(deptInput) deptInput.value = '';
+                if(docNumInput) docNumInput.value = '';
+                if(dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+            } catch(e) {}
+        }
+
+        function renderCalendar() {
+            try {
+                const year = viewDate.getFullYear();
+                const month = viewDate.getMonth();
+                const monthNames = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+                
+                const calendarMonthEl = document.getElementById('calendarMonth');
+                if(calendarMonthEl) {
+                    calendarMonthEl.innerText = `${monthNames[month]} ${year + 543}`;
+                }
+
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const firstDay = new Date(year, month, 1).getDay();
+                const cal = document.getElementById('calendarDays');
+                
+                if(cal) {
+                    cal.innerHTML = '<div>อา</div><div>จ</div><div>อ</div><div>พ</div><div>พฤ</div><div>ศ</div><div>ส</div>';
+                    for(let i=0; i<firstDay; i++) cal.innerHTML += '<div></div>';
+                    for(let i=1; i<=daysInMonth; i++) {
+                        const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                        const hasData = db.some(r => r.date === dStr);
+                        cal.innerHTML += `<div onclick="selectDate('${dStr}')" class="p-2 cursor-pointer rounded-xl ${dStr===selectedDateStr?'bg-orange-500 text-white font-bold':'hover:bg-slate-100 text-slate-600'}">${i}${hasData && dStr!==selectedDateStr?'<div class="w-1.5 h-1.5 bg-orange-400 mx-auto rounded-full mt-1"></div>':''}</div>`;
+                    }
+                }
+            } catch(e) {}
+        }
+        function selectDate(d) { selectedDateStr = d; renderCalendar(); showList(d); }
+        
+        function showList(d) {
+            try {
+                const container = document.getElementById('dataList');
+                if(!container) return;
+                
+                const filtered = db.filter(r => r.date === d).sort((a,b) => b.sequence.localeCompare(a.sequence, undefined, {numeric: true}));
+                container.innerHTML = filtered.length ? '' : '<div class="text-center py-10 text-slate-400 font-bold">ไม่มีข้อมูล</div>';
+                filtered.forEach(r => {
+                    const card = document.createElement('div'); card.className = 'doc-card';
+                    card.innerHTML = `<div class="flex justify-between items-start mb-2"><div class="text-xs font-mono font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded">${r.sequence}</div><button onclick="${currentMode==='edit'?`editItem('${r.id}')`:`deleteItem('${r.id}')`}" class="${currentMode==='edit'?'bg-orange-500':'bg-red-500'} text-white px-3 py-1 rounded-lg text-xs border-none font-bold">${currentMode==='edit'?'แก้ไข':'ลบ'}</button></div><div class="text-sm font-bold text-slate-800">${r.subject}</div><div class="text-[10px] text-slate-500 mt-2 flex justify-between bg-slate-50 p-2 rounded-lg border border-slate-100"><div>เวลา ${r.time}</div><div>${r.from_who} → ${r.to_who} ${r.department ? `(${r.department})` : ''}</div></div>`;
+                    container.appendChild(card);
+                });
+                if(window.lucide) lucide.createIcons();
+            } catch (e) {}
+        }
+
+        window.editItem = (id) => {
+            try {
+                const r = db.find(x => x.id === id);
+                if(!r) return;
+                const formSection = document.getElementById('formSection');
+                const listSection = document.getElementById('listSection');
+                if(formSection) formSection.style.display = 'block';
+                if(listSection) listSection.style.display = 'none';
+                
+                const editIdEl = document.getElementById('editId');
+                const fromWhoEl = document.getElementById('fromWho');
+                const toWhoEl = document.getElementById('toWho');
+                const deptEl = document.getElementById('department');
+                const docNumEl = document.getElementById('docNumber');
+                const subjectEl = document.getElementById('subject');
+                const actionEl = document.getElementById('action');
+                const dateInputEl = document.getElementById('dateInput');
+                const timeInputEl = document.getElementById('timeInput');
+                const seqDisplayEl = document.getElementById('seqDisplay');
+
+                if(editIdEl) editIdEl.value = r.id;
+                if(fromWhoEl) fromWhoEl.value = r.from_who || '';
+                if(toWhoEl) toWhoEl.value = r.to_who || '';
+                if(deptEl) deptEl.value = r.department || '';
+                if(docNumEl) docNumEl.value = r.doc_number || '';
+                if(subjectEl) subjectEl.value = r.subject || '';
+                if(actionEl) actionEl.value = r.action || '';
+                if(dateInputEl) {
+                    dateInputEl.value = r.date;
+                    dateInputEl.disabled = true; 
+                }
+                if(timeInputEl) timeInputEl.value = r.time;
+                if(seqDisplayEl) seqDisplayEl.value = r.sequence;
+                
+                window.scrollTo(0,0);
+            } catch (e) {}
+        };
+        
+        window.deleteItem = (id) => { 
+            if(confirm('ยืนยันการลบ?')) { 
+                db = db.filter(x => x.id !== id); 
+                localStorage.setItem('kmitl_rt_db', JSON.stringify(db)); 
+                showList(selectedDateStr); 
+                renderCalendar(); 
+            } 
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if(window.lucide) lucide.createIcons();
+
+            const docForm = document.getElementById('docForm');
+            if (docForm) {
+                docForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    try {
+                        const editIdEl = document.getElementById('editId');
+                        const fromWhoEl = document.getElementById('fromWho');
+                        const toWhoEl = document.getElementById('toWho');
+                        const deptEl = document.getElementById('department');
+                        const docNumEl = document.getElementById('docNumber');
+                        const subjectEl = document.getElementById('subject');
+                        const actionEl = document.getElementById('action');
+                        const dateInputEl = document.getElementById('dateInput');
+                        const timeInputEl = document.getElementById('timeInput');
+                        const seqDisplayEl = document.getElementById('seqDisplay');
+
+                        const id = editIdEl ? editIdEl.value : '';
+                        const record = { 
+                            id: id || Date.now().toString(), 
+                            from_who: fromWhoEl ? fromWhoEl.value : '', 
+                            to_who: toWhoEl ? toWhoEl.value : '', 
+                            department: deptEl ? deptEl.value : '',
+                            doc_number: docNumEl ? docNumEl.value : '',
+                            subject: subjectEl ? subjectEl.value : '', 
+                            action: actionEl ? actionEl.value : '', 
+                            date: dateInputEl ? dateInputEl.value : '', 
+                            time: timeInputEl ? timeInputEl.value : '', 
+                            sequence: seqDisplayEl ? seqDisplayEl.value : '' 
+                        };
+                        
+                        if(id) { 
+                            const idx = db.findIndex(x => x.id === id); 
+                            if(idx !== -1) db[idx] = record; 
+                        } else { 
+                            db.push(record); 
+                        }
+                        
+                        localStorage.setItem('kmitl_rt_db', JSON.stringify(db));
+                        alert('บันทึกสำเร็จ');
+                        goHome();
+                    } catch (err) {
+                        console.error('Submit Error: ', err);
+                    }
+                });
+            }
+        });
+
+        function changeMonth(v) { viewDate.setMonth(viewDate.getMonth() + v); renderCalendar(); }
+
+        async function exportCurrentMonthToExcel() {
+            try {
+                if(typeof ExcelJS === 'undefined' || typeof saveAs === 'undefined') {
+                    alert('ระบบกำลังโหลดตัวจัดการ Excel กรุณารอสักครู่แล้วลองกดใหม่อีกครั้ง');
+                    return;
+                }
+
+                const year = viewDate.getFullYear();
+                const month = viewDate.getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const monthNames = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+                const wb = new ExcelJS.Workbook();
+                wb.creator = 'OSDA System';
+                wb.created = new Date();
+
+                let hasAnyData = false;
+                let prevLastSequence = "";
+                const firstDayOfMonthStr = `${year}-${String(month+1).padStart(2,'0')}-01`;
+                const pastRecords = db.filter(r => r.date < firstDayOfMonthStr).sort((a,b) => {
+                    if(a.date === b.date) return a.sequence.localeCompare(b.sequence, undefined, {numeric: true});
+                    return a.date.localeCompare(b.date);
+                });
+                if(pastRecords.length > 0) {
+                    prevLastSequence = pastRecords[pastRecords.length - 1].sequence;
+                }
+
+                let lastSheetName = null;
+                let lastCellRef = null;
+                let currentTrackingSequence = prevLastSequence; 
+
+                const applyBorders = (cell) => {
+                    cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                };
+
+                for(let i=1; i<=daysInMonth; i++) {
+                    const dStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                    const sheetName = String(i).padStart(2,'0'); 
+                    const ws = wb.addWorksheet(sheetName);
+                    
+                    ws.pageSetup = { 
+                        paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, 
+                        margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 } 
+                    };
+
+                    ws.columns = [
+                        { width: 10 }, { width: 12 }, { width: 15 }, { width: 10 }, { width: 12 }, { width: 12 }, { width: 15 }, { width: 15 }, { width: 12 }, { width: 45 }, { width: 12 }, { width: 12 }, { width: 15 }, { width: 25 }
+                    ];
+
+                    const row1 = ws.getRow(1);
+                    row1.getCell(1).value = dStr; 
+                    row1.getCell(1).font = { name: 'TH SarabunPSK', size: 16 };
+                    
+                    const cellM1 = row1.getCell(13);
+                    if (lastSheetName && lastCellRef) {
+                        cellM1.value = { formula: `='${lastSheetName}'!${lastCellRef}`, result: currentTrackingSequence };
+                    } else {
+                        cellM1.value = currentTrackingSequence; 
+                    }
+                    cellM1.numFmt = '@'; 
+                    cellM1.font = { name: 'TH SarabunPSK', size: 16 };
+                    cellM1.alignment = { horizontal: 'right' };
+
+                    const cellN1 = row1.getCell(14);
+                    cellN1.value = 'เลขสุดท้ายวันทำการก่อนหน้า';
+                    cellN1.font = { name: 'TH SarabunPSK', size: 16 };
+
+                    const row2 = ws.getRow(2);
+                    row2.height = 35; 
+                    const headers = ['ลำดับที่\nทั่วไป', 'เลขลำดับ\nหนังสือรับ', 'เลขลำดับ\nหนังสือส่ง', 'เลขที่', 'ลงวันที่', 'วันที่\nดำเนินการ', 'จาก', 'ถึง', 'หน่วยรับ', 'เรื่อง', 'การปฏิบัติ', 'หมายเหตุ'];
+                    
+                    headers.forEach((headerText, index) => {
+                        const cell = row2.getCell(index + 1);
+                        cell.value = headerText;
+                        cell.font = { name: 'TH SarabunPSK', size: 16, bold: true }; 
+                        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; 
+                        applyBorders(cell);
+                    });
+
+                    const dayData = db.filter(r => r.date === dStr).sort((a,b) => a.sequence.localeCompare(b.sequence, undefined, {numeric: true}));
+                    
+                    let dataToRender = dayData.length > 0 ? dayData : [ { isEmpty: true } ];
+                    if (dayData.length > 0) hasAnyData = true;
+
+                    let lastDataRowIdx = 2;
+
+                    dataToRender.forEach((item, index) => {
+                        const rIdx = 3 + index;
+                        const dataRow = ws.getRow(rIdx);
+                        dataRow.height = 25; 
+
+                        dataRow.getCell(1).value = index + 1; 
+                        dataRow.getCell(2).value = ''; 
+                        
+                        if (!item.isEmpty) {
+                            const seqCell = dataRow.getCell(3);
+                            seqCell.value = item.sequence;
+                            seqCell.numFmt = '@'; 
+                            
+                            dataRow.getCell(4).value = item.doc_number || ''; 
+                            dataRow.getCell(5).value = item.date; 
+                            dataRow.getCell(6).value = item.date; 
+                            dataRow.getCell(7).value = item.from_who; 
+                            dataRow.getCell(8).value = item.to_who; 
+                            dataRow.getCell(9).value = item.department || ''; 
+                            dataRow.getCell(10).value = item.subject + (item.action ? ` / ${item.action}` : ''); 
+                            dataRow.getCell(11).value = ''; 
+                            dataRow.getCell(12).value = ''; 
+
+                            currentTrackingSequence = item.sequence; 
+                        } else {
+                            dataRow.getCell(3).value = '';
+                            dataRow.getCell(3).numFmt = '@';
+                        }
+
+                        for(let c=1; c<=12; c++) {
+                            const cell = dataRow.getCell(c);
+                            cell.font = { name: 'TH SarabunPSK', size: 16 };
+                            applyBorders(cell);
+                            
+                            if([1, 2, 3, 4, 5, 6, 9].includes(c)) {
+                                cell.alignment = { vertical: 'top', horizontal: 'center', wrapText: true };
+                            } else {
+                                cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                            }
+                        }
+                        lastDataRowIdx = rIdx;
+                    });
+
+                    lastSheetName = sheetName;
+                    if (dayData.length > 0) {
+                        lastCellRef = `C${lastDataRowIdx}`; 
+                    } else {
+                        lastCellRef = `M1`; 
+                    }
+                }
+
+                if(!hasAnyData) {
+                    alert(`ไม่มีข้อมูลในเดือน ${monthNames[month]} ${year + 543} สำหรับส่งออก`);
+                    return;
+                }
+
+                const today = new Date();
+                if(year === today.getFullYear() && month === today.getMonth()) {
+                    wb.views = [ { activeTab: today.getDate() - 1 } ];
+                }
+
+                const buffer = await wb.xlsx.writeBuffer();
+                const fileName = `ออก ${year+543}${String(month+1).padStart(2,'0')} ${monthNames[month]}.xlsx`;
+                
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                saveAs(blob, fileName);
+
+            } catch (err) {
+                console.error('Excel Export Error: ', err);
+                alert('เกิดข้อผิดพลาดในการสร้างไฟล์ Excel');
+            }
+        }
+    </script>
+</body>
+</html>
